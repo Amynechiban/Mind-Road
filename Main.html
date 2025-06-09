@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mind Road - AI Strategy Planner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        // Set theme on initial load to prevent flash
+        if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overscroll-behavior: none;
+            @apply bg-slate-100 text-slate-800 dark:bg-slate-900 dark:text-slate-200;
+        }
+        .node { cursor: pointer; transition: all 0.2s ease-in-out; }
+        .node-rect.selected { @apply stroke-blue-500; stroke-width: 3px; }
+        .connector { @apply stroke-slate-400 dark:stroke-slate-600; stroke-width: 2px; fill: none; transition: d 0.3s ease; }
+        .node-foreign-object {
+            @apply text-slate-800 dark:text-slate-100;
+            text-align: center; font-weight: 500;
+            line-height: 1.4; overflow: hidden; display: flex;
+            align-items: center; justify-content: center;
+        }
+        #loader, #mind-map-loader { display: none; }
+        #message-box, #details-panel, #paths-dashboard-view { transition: opacity 0.3s, transform 0.3s; }
+        #details-panel { box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); }
+        .path-card { transition: all 0.2s ease-in-out; }
+        .path-card:hover { transform: translateY(-5px); @apply shadow-xl; }
+    </style>
+</head>
+<body class="flex flex-col h-screen overflow-hidden">
+
+    <header class="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 p-4 shadow-sm z-30">
+        <div class="container mx-auto flex flex-wrap items-center justify-between gap-4">
+            <h1 class="text-2xl font-bold text-slate-800 dark:text-white">Mind <span class="text-blue-500">Road</span></h1>
+            <div id="mind-map-controls" class="hidden items-center gap-2 flex-wrap">
+                <button id="back-to-paths-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg shadow-sm transition-all">Back to Paths</button>
+                <button id="reset-view-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg shadow-sm transition-all">Center View</button>
+            </div>
+             <div class="flex items-center gap-4">
+                <button id="new-goal-btn" class="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-lg shadow-sm transition-all">Define New Goal</button>
+                <button id="theme-toggle" class="p-2 rounded-lg bg-slate-200 dark:bg-slate-700">
+                    <svg id="theme-icon-light" class="w-5 h-5 text-slate-800" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                    <svg id="theme-icon-dark" class="w-5 h-5 text-white hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <div class="flex-grow relative overflow-hidden">
+        <!-- View 1: Paths Dashboard -->
+        <div id="paths-dashboard-view" class="w-full h-full p-8 overflow-y-auto bg-slate-50 dark:bg-slate-900/50">
+            <h2 class="text-3xl font-bold text-center mb-2">AI-Generated Strategic Paths</h2>
+            <p class="text-slate-500 dark:text-slate-400 text-center mb-8">Select a path to visualize the roadmap and explore the steps.</p>
+            <div id="paths-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- AI Generated Path Cards will be injected here -->
+            </div>
+             <div id="no-paths-message" class="text-center text-slate-500 dark:text-slate-400 py-20">
+                    <p class="text-xl">Your journey begins here.</p>
+                    <p>Define your goal and let the AI build your roadmaps.</p>
+                </div>
+        </div>
+
+        <!-- View 2: Mind Map -->
+        <main id="mind-map-view" class="w-full h-full bg-slate-50 dark:bg-slate-900/50 overflow-hidden hidden">
+            <svg id="mind-map-canvas" class="w-full h-full"></svg>
+            
+            <div id="details-panel" class="absolute bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg p-5 w-80 transform opacity-0 pointer-events-none z-20">
+                <h3 id="details-title" class="font-bold text-lg mb-2 text-slate-800 dark:text-white"></h3>
+                <p id="details-content" class="text-sm text-slate-600 dark:text-slate-300 max-h-60 overflow-y-auto"></p>
+                <button id="details-close-btn" class="absolute top-2 right-2 text-2xl text-slate-400 hover:text-slate-600 dark:hover:text-white">&times;</button>
+            </div>
+
+            <div id="mind-map-loader" class="absolute inset-0 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-10">
+                 <div class="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+        </main>
+    </div>
+
+    <div id="message-box" class="fixed bottom-5 right-5 bg-red-500 text-white py-3 px-5 rounded-lg shadow-lg opacity-0 transform translate-y-10 pointer-events-none z-40">
+        <p id="message-text"></p>
+    </div>
+    
+    <div id="goal-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-white dark:bg-slate-800 p-8 rounded-lg shadow-2xl w-full max-w-lg">
+            <h2 class="text-2xl font-bold mb-2">Define Your Goal</h2>
+            <p class="text-slate-600 dark:text-slate-400 mb-6">Provide details so the AI can generate the best strategic paths for you.</p>
+            <div class="space-y-4">
+                <div>
+                    <label for="goal-input" class="block text-sm font-medium text-slate-700 dark:text-slate-300">What is your primary goal?</label>
+                    <input type="text" id="goal-input" class="mt-1 w-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-2 rounded-lg" placeholder="e.g., Launch a new podcast">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="budget-input" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Estimated budget?</label>
+                        <input type="text" id="budget-input" class="mt-1 w-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-2 rounded-lg" placeholder="e.g., $5,000">
+                    </div>
+                     <div>
+                        <label for="timeline-input" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Desired timeline?</label>
+                        <input type="text" id="timeline-input" class="mt-1 w-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-2 rounded-lg" placeholder="e.g., 3 months">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Complexity Level</label>
+                    <div id="complexity-group" class="mt-2 grid grid-cols-3 gap-2 rounded-lg bg-slate-100 dark:bg-slate-700 p-1">
+                         <label class="complexity-label text-center py-2 px-4 rounded-md cursor-pointer transition-colors bg-white dark:bg-slate-900 text-blue-600 shadow"><input type="radio" name="complexity" value="Easy" class="sr-only" checked>Easy</label>
+                         <label class="complexity-label text-center py-2 px-4 rounded-md cursor-pointer transition-colors"><input type="radio" name="complexity" value="Normal" class="sr-only">Normal</label>
+                         <label class="complexity-label text-center py-2 px-4 rounded-md cursor-pointer transition-colors"><input type="radio" name="complexity" value="Complex" class="sr-only">Complex</label>
+                    </div>
+                </div>
+            </div>
+            <button id="generate-paths-btn" class="mt-6 w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2">
+                <span id="loader" class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                Generate Paths
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const pathsDashboardView = document.getElementById('paths-dashboard-view');
+        const mindMapView = document.getElementById('mind-map-view');
+        const mindMapControls = document.getElementById('mind-map-controls');
+        const backToPathsBtn = document.getElementById('back-to-paths-btn');
+        const newGoalBtn = document.getElementById('new-goal-btn');
+        const mindMapLoader = document.getElementById('mind-map-loader');
+        const themeToggle = document.getElementById('theme-toggle');
+        const themeIconLight = document.getElementById('theme-icon-light');
+        const themeIconDark = document.getElementById('theme-icon-dark');
+        
+        const svg = document.getElementById('mind-map-canvas');
+        const resetViewBtn = document.getElementById('reset-view-btn');
+        const pathsContainer = document.getElementById('paths-container');
+        const noPathsMessage = document.getElementById('no-paths-message');
+        const goalModal = document.getElementById('goal-modal');
+        const generatePathsBtn = document.getElementById('generate-paths-btn');
+        const goalInput = document.getElementById('goal-input');
+        const budgetInput = document.getElementById('budget-input');
+        const timelineInput = document.getElementById('timeline-input');
+        const complexityGroup = document.getElementById('complexity-group');
+        const detailsPanel = document.getElementById('details-panel');
+        const detailsTitle = document.getElementById('details-title');
+        const detailsContent = document.getElementById('details-content');
+        const detailsCloseBtn = document.getElementById('details-close-btn');
+        const loader = document.getElementById('loader');
+        const messageBox = document.getElementById('message-box');
+        const messageText = document.getElementById('message-text');
+
+        // App State
+        let nodes = [];
+        let connectors = [];
+        let generatedPaths = [];
+        let selectedNodeId = null;
+        let nodeIdCounter = 0;
+        let isDragging = false, dragTarget = null, offset = { x: 0, y: 0 };
+        let transform = { x: 0, y: 0, k: 1 }, isPanning = false, panStart = { x: 0, y: 0 };
+        const SVG_NS = "http://www.w3.org/2000/svg";
+        const g = document.createElementNS(SVG_NS, 'g');
+        svg.appendChild(g);
+
+        const NODE_WIDTH = 180;
+        const NODE_HEIGHT = 80;
+        const LEVEL_HEIGHT = 160;
+
+        // --- UI & View Management ---
+        function setAILoading(isLoading) {
+            loader.style.display = isLoading ? 'inline-block' : 'none';
+            generatePathsBtn.disabled = isLoading;
+        }
+
+        function showMessage(message, type = 'error') {
+            messageText.textContent = message;
+            messageBox.className = `fixed bottom-5 right-5 text-white py-3 px-5 rounded-lg shadow-lg opacity-0 transform translate-y-10 pointer-events-none z-40 ${type === 'error' ? 'bg-red-500' : 'bg-green-500'}`;
+            messageBox.classList.remove('opacity-0', 'translate-y-10');
+            messageBox.classList.add('opacity-100', 'translate-y-0');
+            setTimeout(() => {
+                messageBox.classList.remove('opacity-100', 'translate-y-0');
+                messageBox.classList.add('opacity-0', 'translate-y-10');
+            }, 4000);
+        }
+        
+        function showPathsDashboard() {
+            pathsDashboardView.classList.remove('hidden');
+            mindMapView.classList.add('hidden');
+            mindMapControls.classList.add('hidden');
+            newGoalBtn.classList.remove('hidden');
+        }
+
+        function showMindMap() {
+            pathsDashboardView.classList.add('hidden');
+            mindMapView.classList.remove('hidden');
+            mindMapControls.classList.remove('hidden');
+            newGoalBtn.classList.add('hidden');
+        }
+
+        function showDetailsPanel(node) {
+            const nodeElement = g.querySelector(`[data-id='${node.id}']`);
+            if (!nodeElement) return;
+            const ctm = nodeElement.getScreenCTM();
+
+            detailsTitle.textContent = node.title;
+            detailsContent.innerHTML = node.details.replace(/\n/g, '<br>'); // Keep line breaks
+            
+            detailsPanel.style.left = `${ctm.e + ctm.a * NODE_WIDTH + 10}px`;
+            detailsPanel.style.top = `${ctm.f}px`;
+
+            detailsPanel.classList.remove('opacity-0', 'pointer-events-none');
+        }
+
+        function hideDetailsPanel() {
+             detailsPanel.classList.add('opacity-0', 'pointer-events-none');
+        }
+
+        // --- Core Mind Map & SVG Functions ---
+        function getSVGPoint(x, y) {
+            const pt = svg.createSVGPoint();
+            pt.x = x;
+            pt.y = y;
+            return pt.matrixTransform(g.getScreenCTM().inverse());
+        }
+
+        function getCurvePath(startX, startY, endX, endY) {
+            const c1Y = startY + (endY - startY) * 0.5;
+            const c2Y = endY - (endY - startY) * 0.5;
+            return `M ${startX},${startY} C ${startX},${c1Y} ${endX},${c2Y} ${endX},${endY}`;
+        }
+
+        function createNode(title, details, x, y, parentId = null) {
+            const newNode = { id: nodeIdCounter++, title, details, x, y, parentId, children: [] };
+            nodes.push(newNode);
+            if (parentId !== null) {
+                const parent = nodes.find(n => n.id === parentId);
+                if (parent) parent.children.push(newNode.id);
+            }
+            return newNode;
+        }
+
+        function render() {
+            g.innerHTML = '';
+            connectors = [];
+            nodes.forEach(node => {
+                if (node.parentId !== null) {
+                    const parent = nodes.find(p => p.id === node.parentId);
+                    if (parent) {
+                        const connector = document.createElementNS(SVG_NS, 'path');
+                        connector.setAttribute('class', 'connector');
+                        connector.setAttribute('data-child-id', node.id);
+                        g.appendChild(connector);
+                        connectors.push(connector);
+                    }
+                }
+            });
+
+            nodes.forEach(node => {
+                const group = document.createElementNS(SVG_NS, 'g');
+                group.setAttribute('class', 'node');
+                group.setAttribute('data-id', node.id);
+                group.setAttribute('transform', `translate(${node.x}, ${node.y})`);
+
+                const rect = document.createElementNS(SVG_NS, 'rect');
+                rect.setAttribute('width', NODE_WIDTH);
+                rect.setAttribute('height', NODE_HEIGHT);
+                rect.setAttribute('x', -NODE_WIDTH / 2);
+                rect.setAttribute('y', -NODE_HEIGHT / 2);
+                rect.setAttribute('rx', 12);
+                const isDark = document.documentElement.classList.contains('dark');
+                const baseColor = node.parentId === null ? 'blue' : 'slate';
+                const lightColors = node.parentId === null ? 'fill-blue-100 stroke-blue-300' : 'fill-white stroke-slate-300';
+                const darkColors = node.parentId === null ? 'fill-blue-900/50 stroke-blue-500' : 'fill-slate-700 stroke-slate-600';
+                rect.setAttribute('class', `node-rect ${isDark ? darkColors : lightColors}`);
+                if (node.id === selectedNodeId) rect.classList.add('selected');
+
+                const fo = document.createElementNS(SVG_NS, 'foreignObject');
+                fo.setAttribute('x', -NODE_WIDTH / 2);
+                fo.setAttribute('y', -NODE_HEIGHT / 2);
+                fo.setAttribute('width', NODE_WIDTH);
+                fo.setAttribute('height', NODE_HEIGHT);
+                fo.innerHTML = `<div class="node-foreign-object w-full h-full p-2">${node.title.replace(/</g, "&lt;")}</div>`;
+
+                group.appendChild(rect);
+                group.appendChild(fo);
+                g.appendChild(group);
+            });
+            updateConnectors();
+        }
+        
+        function updateConnectors() {
+            connectors.forEach(conn => {
+                const childId = parseInt(conn.getAttribute('data-child-id'));
+                const child = nodes.find(n => n.id === childId);
+                const parent = nodes.find(p => p.id === child.parentId);
+                if (child && parent) {
+                    conn.setAttribute('d', getCurvePath(parent.x, parent.y, child.x, child.y));
+                }
+            });
+        }
+        
+        function resetView() {
+            if (nodes.length === 0) return;
+            const bounds = g.getBBox();
+            if (bounds.width === 0 || bounds.height === 0) return;
+            const parent = svg.parentElement;
+            const { width, height } = parent.getBoundingClientRect();
+            
+            const scaleX = width / (bounds.width + 120);
+            const scaleY = height / (bounds.height + 120);
+            transform.k = Math.min(scaleX, scaleY, 1);
+
+            transform.x = (width / 2) - (bounds.x + bounds.width / 2) * transform.k;
+            transform.y = (height / 2) - (bounds.y + bounds.height / 2) * transform.k;
+            
+            applyTransform();
+        }
+
+        function applyTransform() {
+            g.setAttribute('transform', `translate(${transform.x}, ${transform.y}) scale(${transform.k})`);
+            hideDetailsPanel();
+        }
+
+        // --- Path Visualization ---
+        function positionTree(nodeId, x, y) {
+            const node = nodes.find(n => n.id === nodeId);
+            node.x = x;
+            node.y = y;
+            const children = nodes.filter(n => n.parentId === nodeId);
+            if (children.length > 0) {
+                const totalChildBranchWidths = children.reduce((sum, child) => sum + child.branchWidth, 0);
+                const totalSpacing = (children.length - 1) * 60;
+                
+                let currentX = x - (totalChildBranchWidths + totalSpacing) / 2;
+                
+                children.forEach(child => {
+                    const childX = currentX + child.branchWidth / 2;
+                    positionTree(child.id, childX, y + LEVEL_HEIGHT);
+                    currentX += child.branchWidth + 60;
+                });
+            }
+        }
+        
+        function calculateBranchWidth(nodeId) {
+            const node = nodes.find(n => n.id === nodeId);
+            const children = nodes.filter(n => n.parentId === nodeId);
+            if (children.length === 0) {
+                node.branchWidth = NODE_WIDTH;
+                return NODE_WIDTH;
+            }
+            
+            const childrenTotalWidth = children.reduce((acc, child) => {
+                return acc + calculateBranchWidth(child.id) + 60;
+            }, -60); // Subtract last spacing
+            
+            node.branchWidth = Math.max(NODE_WIDTH, childrenTotalWidth);
+            return node.branchWidth;
+        }
+
+        function visualizePath(pathIndex) {
+            const path = generatedPaths[pathIndex];
+            if (!path) return;
+
+            mindMapLoader.style.display = 'flex';
+            showMindMap();
+
+            setTimeout(() => { 
+                nodes = [];
+                nodeIdCounter = 0;
+                selectedNodeId = null;
+                hideDetailsPanel();
+
+                const rootNode = createNode(path.pathName, path.description, 0, 0);
+
+                function buildTree(currentSteps, parentId) {
+                    (currentSteps || []).forEach(step => {
+                        const newNode = createNode(step.title, step.actionable_details, 0, 0, parentId);
+                        if(step.sub_steps && step.sub_steps.length > 0) {
+                            buildTree(step.sub_steps, newNode.id);
+                        }
+                    });
+                }
+                
+                buildTree(path.steps, rootNode.id);
+                
+                calculateBranchWidth(rootNode.id);
+                positionTree(rootNode.id, 0, 50);
+
+                render();
+                resetView();
+                mindMapLoader.style.display = 'none';
+            }, 100);
+        }
+        
+        function renderPathsPanel() {
+            if (generatedPaths.length > 0) {
+                noPathsMessage.style.display = 'none';
+                pathsContainer.innerHTML = '';
+                generatedPaths.forEach((path, index) => {
+                    const pathCard = document.createElement('div');
+                    pathCard.className = 'path-card border border-slate-200 dark:border-slate-700 p-6 rounded-lg bg-white dark:bg-slate-800 cursor-pointer';
+                    pathCard.onclick = () => visualizePath(index);
+                    pathCard.innerHTML = `
+                        <h3 class="font-bold text-xl text-blue-500">${path.pathName}</h3>
+                        <p class="text-sm text-slate-600 dark:text-slate-300 mt-2 h-20">${path.description}</p>
+                        <div class="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
+                            <h4 class="font-semibold text-sm text-slate-800 dark:text-slate-200">💰 Cost Analysis</h4>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">${path.cost}</p>
+                        </div>
+                        <div class="mt-3">
+                            <h4 class="font-semibold text-sm text-slate-800 dark:text-slate-200">⚠️ Risk Management</h4>
+                            <ul class="list-disc list-inside text-xs text-slate-500 dark:text-slate-400 mt-1 space-y-1">
+                                ${path.risks.map(risk => `<li>${risk.replace(/</g, "&lt;")}</li>`).join('')}
+                            </ul>
+                        </div>
+                    `;
+                    pathsContainer.appendChild(pathCard);
+                });
+            } else {
+                pathsContainer.innerHTML = '';
+                noPathsMessage.style.display = 'block';
+            }
+        }
+
+        // --- AI Feature ---
+        async function handleGeneratePaths() {
+            const goal = goalInput.value.trim();
+            const budget = budgetInput.value.trim();
+            const timeline = timelineInput.value.trim();
+            const complexity = document.querySelector('input[name="complexity"]:checked').value;
+
+            if (!goal) {
+                showMessage("Please define your primary goal.");
+                return;
+            }
+
+            setAILoading(true);
+
+            const prompt = `You are an expert project strategist. A user needs help planning a project.
+            User's Goal: "${goal}"
+            User's Budget: "${budget || 'Not specified'}"
+            User's Timeline: "${timeline || 'Not specified'}"
+            Requested Complexity: "${complexity}"
+
+            Generate 3 distinct strategic paths.
+            - For 'Easy' complexity, provide 3-4 high-level steps.
+            - For 'Normal' complexity, provide 5-7 detailed steps.
+            - For 'Complex' complexity, provide 5-7 main steps, with some of them containing nested 'sub_steps'.
+            
+            Return ONLY a valid JSON object with a key "paths" which is an array of path objects.
+            Each path object must have this exact structure:
+            {
+              "pathName": "Strategy Name",
+              "description": "1-2 sentence summary.",
+              "cost": "Analysis of cost in money, time, resources.",
+              "risks": ["List of 2-3 potential risks."],
+              "steps": [
+                {
+                    "title": "Step 1 concise title", 
+                    "actionable_details": "Detailed, actionable advice and key considerations for executing step 1.",
+                    "sub_steps": [ { "title": "Sub-step 1.1", "actionable_details": "Details for sub-step 1.1" } ]
+                }
+              ]
+            }`;
+            
+            const payload = {
+                contents: [{ role: "user", parts: [{ text: prompt }] }],
+                generationConfig: { responseMimeType: "application/json" }
+            };
+            const apiKey = "AIzaSyCBOWydOKb2jOnkBzZJlztVGnUi3E7DMCQ";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!response.ok) throw new Error(`API request failed: ${response.statusText}`);
+                const result = await response.json();
+                const textResponse = result.candidates[0].content.parts[0].text;
+                const parsedJson = JSON.parse(textResponse);
+
+                if (parsedJson.paths && Array.isArray(parsedJson.paths)) {
+                    generatedPaths.push(...parsedJson.paths);
+                    renderPathsPanel();
+                    goalModal.style.display = 'none';
+                    showPathsDashboard();
+                    showMessage("New strategies generated!", 'success');
+                } else {
+                    throw new Error("Invalid JSON structure from AI.");
+                }
+            } catch (error) {
+                console.error("Error calling Gemini API:", error);
+                showMessage(`AI Error: ${error.message}`);
+            } finally {
+                setAILoading(false);
+            }
+        }
+        
+        function handleThemeToggle() {
+            const isDark = document.documentElement.classList.toggle('dark');
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            themeIconLight.classList.toggle('hidden', isDark);
+            themeIconDark.classList.toggle('hidden', !isDark);
+            // Re-render map to apply new node colors if it's visible
+            if (!mindMapView.classList.contains('hidden')) {
+                render();
+            }
+        }
+
+        // --- Event Handlers ---
+        generatePathsBtn.addEventListener('click', handleGeneratePaths);
+        backToPathsBtn.addEventListener('click', showPathsDashboard);
+        newGoalBtn.addEventListener('click', () => { goalModal.style.display = 'flex'; });
+        detailsCloseBtn.addEventListener('click', hideDetailsPanel);
+        resetViewBtn.addEventListener('click', resetView);
+        themeToggle.addEventListener('click', handleThemeToggle);
+        complexityGroup.addEventListener('change', (e) => {
+             if (e.target.name === 'complexity') {
+                document.querySelectorAll('.complexity-label').forEach(label => {
+                    label.classList.remove('bg-white', 'dark:bg-slate-900', 'text-blue-600', 'shadow');
+                });
+                e.target.parentElement.classList.add('bg-white', 'dark:bg-slate-900', 'text-blue-600', 'shadow');
+             }
+        });
+
+
+        svg.addEventListener('mousedown', (e) => {
+            hideDetailsPanel();
+            if (e.target.closest('.node')) {
+                const nodeGroup = e.target.closest('.node');
+                const id = parseInt(nodeGroup.getAttribute('data-id'));
+                const node = nodes.find(n => n.id === id);
+                
+                if (e.detail === 1) { 
+                    selectedNodeId = id;
+                    showDetailsPanel(node);
+                    render();
+                }
+
+                isDragging = true;
+                dragTarget = nodeGroup;
+                const startPoint = getSVGPoint(e.clientX, e.clientY);
+                offset.x = startPoint.x - node.x;
+                offset.y = startPoint.y - node.y;
+                
+            } else {
+                selectedNodeId = null;
+                isPanning = true;
+                panStart.x = e.clientX - transform.x;
+                panStart.y = e.clientY - transform.y;
+                svg.style.cursor = 'grabbing';
+                render();
+            }
+        });
+
+        svg.addEventListener('mousemove', (e) => {
+            if (isDragging && dragTarget && selectedNodeId !== null) {
+                e.preventDefault();
+                const currentPoint = getSVGPoint(e.clientX, e.clientY);
+                const node = nodes.find(n => n.id === selectedNodeId);
+                if (node && node.parentId !== null) { // Can't drag root
+                    node.x = currentPoint.x - offset.x;
+                    node.y = currentPoint.y - offset.y;
+                    dragTarget.setAttribute('transform', `translate(${node.x}, ${node.y})`);
+                    updateConnectors();
+                }
+            } else if (isPanning) {
+                 e.preventDefault();
+                 transform.x = e.clientX - panStart.x;
+                 transform.y = e.clientY - panStart.y;
+                 applyTransform();
+            }
+        });
+
+        window.addEventListener('mouseup', () => {
+            isDragging = false;
+            dragTarget = null;
+            isPanning = false;
+            svg.style.cursor = 'default';
+        });
+
+        svg.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const scaleAmount = -e.deltaY * 0.001;
+            const newScale = transform.k * (1 + scaleAmount);
+            if (newScale < 0.1 || newScale > 2) return;
+            const mousePoint = getSVGPoint(e.clientX, e.clientY);
+            transform.x -= (mousePoint.x * scaleAmount * transform.k);
+            transform.y -= (mousePoint.y * scaleAmount * transform.k);
+            transform.k = newScale;
+            applyTransform();
+        });
+        
+        window.addEventListener('load', () => {
+             goalModal.style.display = 'flex';
+             // Set initial theme icon state
+            const isDark = document.documentElement.classList.contains('dark');
+            themeIconLight.classList.toggle('hidden', isDark);
+            themeIconDark.classList.toggle('hidden', !isDark);
+        });
+
+    </script>
+</body>
+</html>
