@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mind Road - AI Strategy Planner</title>
+    <title>uThink - AI Strategy Planner</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script>
-        // Set theme on initial load
-        if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-            document.documentElement.classList.add('dark');
+        // Set theme on initial load to prevent flash
+        if (localStorage.getItem('theme') === 'light' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: light)').matches)) {
+            document.documentElement.classList.add('light');
         } else {
-            document.documentElement.classList.remove('dark');
+            document.documentElement.classList.remove('light');
         }
     </script>
     <style>
@@ -23,33 +23,30 @@
             @apply bg-slate-100 text-slate-800 dark:bg-slate-900 dark:text-slate-200;
         }
         
-        /* NEW: Node entrance animation */
+        /* Entrance animation for newly created nodes */
         @keyframes node-appear {
             from { opacity: 0; transform: scale(0.8); }
             to { opacity: 1; transform: scale(1); }
         }
 
-        .node.is-new {
+        .node.is-new > g {
             animation: node-appear 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        .node g {
-            /* NEW: Smooth transition for node movement */
+        /* Smooth transition for node movement during layout changes */
+        .node > g {
             transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .node-rect { transition: fill 0.3s, stroke 0.3s, stroke-dasharray 0.3s; }
-        .node-rect.selected { @apply stroke-blue-500; stroke-width: 3px; }
+        .node-rect.selected { @apply stroke-violet-500; stroke-width: 3px; }
         
         .connector {
-            stroke-width: 2px;
+            stroke-width: 2.5px; /* Thicker for better visibility */
             fill: none;
-            /* NEW: Smooth transition for connector paths */
             transition: d 0.6s cubic-bezier(0.4, 0, 0.2, 1), stroke 0.3s;
-            @apply stroke-slate-300 dark:stroke-slate-600;
         }
 
-        /* UPDATED: ForeignObject now uses flex for alignment of status dots */
         .node-foreign-object {
             @apply text-slate-800 dark:text-slate-100;
             font-weight: 500;
@@ -58,11 +55,11 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 8px; /* Gap between dot and text */
+            gap: 8px;
             padding: 0 12px;
         }
 
-        /* NEW: Status Dot styling */
+        /* Status Dot styling for child nodes */
         .status-dot {
             flex-shrink: 0;
             width: 10px;
@@ -73,28 +70,32 @@
         .status-todo { @apply bg-slate-400 dark:bg-slate-500; }
         .status-inprogress { @apply bg-blue-500; }
         .status-complete { @apply bg-green-500; }
-
+        
         .node-title {
             text-align: left;
             flex-grow: 1;
+            white-space: normal;
+            word-wrap: break-word;
+            max-height: 100%;
         }
 
         #loader, #mind-map-loader, #ai-copilot-loader { display: none; }
-        #message-box, #paths-dashboard-view { transition: opacity 0.3s, transform 0.3s; }
-        /* UPDATED: Details panel animation for a smoother slide-in effect */
+        
         #details-panel { 
             box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); 
             transition: opacity 0.3s, transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
+
         .path-card { transition: all 0.2s ease-in-out; }
         .path-card:hover { transform: translateY(-5px); @apply shadow-xl; }
     </style>
 </head>
 <body class="flex flex-col h-screen overflow-hidden">
 
+    <!-- Header and other static HTML elements -->
     <header class="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 p-4 shadow-sm z-30">
         <div class="container mx-auto flex flex-wrap items-center justify-between gap-4">
-            <h1 class="text-2xl font-bold text-slate-800 dark:text-white">Mind <span class="text-blue-500">Road</span></h1>
+            <h1 class="text-2xl font-bold text-slate-800 dark:text-white">Mind <span class="text-violet-500">Road</span></h1>
             <div id="mind-map-controls" class="hidden items-center gap-2 flex-wrap">
                 <button id="back-to-paths-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg shadow-sm transition-all">Back to Paths</button>
                 <button id="reset-view-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg shadow-sm transition-all">Center View</button>
@@ -120,7 +121,7 @@
                     <p>Define your goal and let the AI build your roadmaps.</p>
             </div>
         </div>
-        <main id="mind-map-view" class="w-full h-full bg-slate-50 dark:bg-slate-900/50 overflow-hidden hidden">
+        <main id="mind-map-view" class="w-full h-full bg-slate-100 dark:bg-slate-900 overflow-hidden hidden">
             <svg id="mind-map-canvas" class="w-full h-full cursor-grab active:cursor-grabbing"></svg>
             <div id="details-panel" class="absolute bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg p-5 w-80 transform opacity-0 pointer-events-none z-20">
                 <h3 id="details-title" class="font-bold text-lg mb-2 text-slate-800 dark:text-white"></h3>
@@ -129,14 +130,14 @@
                 <div class="grid grid-cols-2 gap-4 mb-4 border-t border-slate-200 dark:border-slate-700 pt-4">
                     <div>
                         <label for="node-type-select" class="block text-xs font-medium text-slate-500 dark:text-slate-400">Type</label>
-                        <select id="node-type-select" class="mt-1 block w-full rounded-md border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 py-1.5 px-2 text-sm focus:ring-blue-500 focus:border-blue-500">
+                        <select id="node-type-select" class="mt-1 block w-full rounded-md border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 py-1.5 px-2 text-sm focus:ring-violet-500 focus:border-violet-500">
                             <option value="task">Task</option>
                             <option value="milestone">Milestone</option>
                         </select>
                     </div>
                     <div>
                         <label for="node-status-select" class="block text-xs font-medium text-slate-500 dark:text-slate-400">Status</label>
-                        <select id="node-status-select" class="mt-1 block w-full rounded-md border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 py-1.5 px-2 text-sm focus:ring-blue-500 focus:border-blue-500">
+                        <select id="node-status-select" class="mt-1 block w-full rounded-md border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 py-1.5 px-2 text-sm focus:ring-violet-500 focus:border-violet-500">
                             <option value="todo">To Do</option>
                             <option value="inprogress">In Progress</option>
                             <option value="complete">Complete</option>
@@ -145,21 +146,21 @@
                 </div>
                 <div id="ai-copilot-section" class="border-t border-slate-200 dark:border-slate-700 pt-4">
                     <h4 class="text-sm font-semibold mb-2 flex items-center gap-2">
-                        <svg class="w-5 h-5 text-purple-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M10 3.5a1.5 1.5 0 013 0V4a1 1 0 001 1h.5a1.5 1.5 0 010 3H14a1 1 0 00-1 1v.5a1.5 1.5 0 01-3 0V9a1 1 0 00-1-1h-.5a1.5 1.5 0 010-3H9a1 1 0 001-1v-.5z" /><path d="M5.5 10.5a1.5 1.5 0 013 0V11a1 1 0 001 1h.5a1.5 1.5 0 010 3H10a1 1 0 00-1 1v.5a1.5 1.5 0 01-3 0V15a1 1 0 00-1-1h-.5a1.5 1.5 0 010-3H6a1 1 0 001-1v-.5zM10 6.5a1.5 1.5 0 01-3 0V6a1 1 0 00-1-1h-.5a1.5 1.5 0 010-3H6a1 1 0 001 1v.5a1.5 1.5 0 013 0V5a1 1 0 001-1h.5a1.5 1.5 0 010 3H13a1 1 0 00-1-1v-.5z" /></svg>
+                        <svg class="w-5 h-5 text-violet-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M10 3.5a1.5 1.5 0 013 0V4a1 1 0 001 1h.5a1.5 1.5 0 010 3H14a1 1 0 00-1 1v.5a1.5 1.5 0 01-3 0V9a1 1 0 00-1-1h-.5a1.5 1.5 0 010-3H9a1 1 0 001-1v-.5z" /><path d="M5.5 10.5a1.5 1.5 0 013 0V11a1 1 0 001 1h.5a1.5 1.5 0 010 3H10a1 1 0 00-1 1v.5a1.5 1.5 0 01-3 0V15a1 1 0 00-1-1h-.5a1.5 1.5 0 010-3H6a1 1 0 001-1v-.5zM10 6.5a1.5 1.5 0 01-3 0V6a1 1 0 00-1-1h-.5a1.5 1.5 0 010-3H6a1 1 0 001 1v.5a1.5 1.5 0 013 0V5a1 1 0 001-1h.5a1.5 1.5 0 010 3H13a1 1 0 00-1-1v-.5z" /></svg>
                         AI Co-pilot
                     </h4>
                     <div class="flex flex-col gap-2">
-                         <button data-action="breakdown" class="ai-copilot-btn w-full text-sm bg-purple-500 hover:bg-purple-600 text-white font-semibold py-2 px-3 rounded-lg flex items-center justify-center gap-2 transition-transform active:scale-95">Break Down Step</button>
+                         <button data-action="breakdown" class="ai-copilot-btn w-full text-sm bg-violet-500 hover:bg-violet-600 text-white font-semibold py-2 px-3 rounded-lg flex items-center justify-center gap-2 transition-transform active:scale-95">Break Down Step</button>
                          <button data-action="risks" class="ai-copilot-btn w-full text-sm bg-rose-500 hover:bg-rose-600 text-white font-semibold py-2 px-3 rounded-lg flex items-center justify-center gap-2 transition-transform active:scale-95">Identify Risks</button>
                     </div>
-                    <div id="ai-copilot-loader" class="mt-2 w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                    <div id="ai-copilot-loader" class="mt-2 w-6 h-6 border-2 border-violet-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
                 </div>
             </div>
             <div id="mind-map-loader" class="absolute inset-0 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-10">
-                 <div class="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                 <div class="w-16 h-16 border-4 border-violet-500 border-t-transparent rounded-full animate-spin"></div>
             </div>
         </main>
-        <div id="message-box" class="fixed bottom-5 right-5 bg-red-500 text-white py-3 px-5 rounded-lg shadow-lg opacity-0 transform translate-y-10 pointer-events-none z-40">
+        <div id="message-box" class="fixed bottom-5 right-5 bg-red-500 text-white py-3 px-5 rounded-lg shadow-lg z-40 transition-all duration-300 opacity-0 transform translate-y-10">
             <p id="message-text"></p>
         </div>
         <div id="goal-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 hidden">
@@ -184,7 +185,7 @@
                     <div>
                         <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">Complexity Level</label>
                         <div id="complexity-group" class="mt-2 grid grid-cols-3 gap-2 rounded-lg bg-slate-100 dark:bg-slate-700 p-1">
-                             <label class="complexity-label text-center py-2 px-4 rounded-md cursor-pointer transition-colors bg-white dark:bg-slate-900 text-blue-600 shadow"><input type="radio" name="complexity" value="Easy" class="sr-only" checked>Easy</label>
+                             <label class="complexity-label text-center py-2 px-4 rounded-md cursor-pointer transition-colors bg-white dark:bg-slate-900 text-violet-600 shadow"><input type="radio" name="complexity" value="Easy" class="sr-only" checked>Easy</label>
                              <label class="complexity-label text-center py-2 px-4 rounded-md cursor-pointer transition-colors"><input type="radio" name="complexity" value="Normal" class="sr-only">Normal</label>
                              <label class="complexity-label text-center py-2 px-4 rounded-md cursor-pointer transition-colors"><input type="radio" name="complexity" value="Complex" class="sr-only">Complex</label>
                         </div>
@@ -192,7 +193,7 @@
                 </div>
                 <div class="flex items-center justify-end gap-4 mt-6">
                     <button id="cancel-goal-btn" class="text-sm font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-white">Cancel</button>
-                    <button id="generate-paths-btn" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2">
+                    <button id="generate-paths-btn" class="bg-violet-600 hover:bg-violet-700 text-white font-bold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2">
                         <span id="loader" class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
                         Generate Paths
                     </button>
@@ -203,173 +204,164 @@
 
     <script>
         // DOM Elements
-        const dom = {
-            pathsDashboardView: document.getElementById('paths-dashboard-view'),
-            mindMapView: document.getElementById('mind-map-view'),
-            mindMapControls: document.getElementById('mind-map-controls'),
-            backToPathsBtn: document.getElementById('back-to-paths-btn'),
-            newGoalBtn: document.getElementById('new-goal-btn'),
-            mindMapLoader: document.getElementById('mind-map-loader'),
-            themeToggle: document.getElementById('theme-toggle'),
-            themeIconLight: document.getElementById('theme-icon-light'),
-            themeIconDark: document.getElementById('theme-icon-dark'),
-            svg: document.getElementById('mind-map-canvas'),
-            resetViewBtn: document.getElementById('reset-view-btn'),
-            pathsContainer: document.getElementById('paths-container'),
-            noPathsMessage: document.getElementById('no-paths-message'),
-            goalModal: document.getElementById('goal-modal'),
-            generatePathsBtn: document.getElementById('generate-paths-btn'),
-            cancelGoalBtn: document.getElementById('cancel-goal-btn'),
-            goalInput: document.getElementById('goal-input'),
-            budgetInput: document.getElementById('budget-input'),
-            timelineInput: document.getElementById('timeline-input'),
-            complexityGroup: document.getElementById('complexity-group'),
-            detailsPanel: document.getElementById('details-panel'),
-            detailsTitle: document.getElementById('details-title'),
-            detailsContent: document.getElementById('details-content'),
-            detailsCloseBtn: document.getElementById('details-close-btn'),
-            loader: document.getElementById('loader'),
-            messageBox: document.getElementById('message-box'),
-            messageText: document.getElementById('message-text'),
-            exportSvgBtn: document.getElementById('export-svg-btn'),
-            nodeTypeSelect: document.getElementById('node-type-select'),
-            nodeStatusSelect: document.getElementById('node-status-select'),
-            aiCopilotSection: document.getElementById('ai-copilot-section'),
-            aiCopilotLoader: document.getElementById('ai-copilot-loader'),
-        };
+        const pathsDashboardView = document.getElementById('paths-dashboard-view');
+        const mindMapView = document.getElementById('mind-map-view');
+        const mindMapControls = document.getElementById('mind-map-controls');
+        const backToPathsBtn = document.getElementById('back-to-paths-btn');
+        const newGoalBtn = document.getElementById('new-goal-btn');
+        const mindMapLoader = document.getElementById('mind-map-loader');
+        const themeToggle = document.getElementById('theme-toggle');
+        const themeIconLight = document.getElementById('theme-icon-light');
+        const themeIconDark = document.getElementById('theme-icon-dark');
+        const svg = document.getElementById('mind-map-canvas');
+        const resetViewBtn = document.getElementById('reset-view-btn');
+        const pathsContainer = document.getElementById('paths-container');
+        const noPathsMessage = document.getElementById('no-paths-message');
+        const goalModal = document.getElementById('goal-modal');
+        const generatePathsBtn = document.getElementById('generate-paths-btn');
+        const cancelGoalBtn = document.getElementById('cancel-goal-btn');
+        const goalInput = document.getElementById('goal-input');
+        const budgetInput = document.getElementById('budget-input');
+        const timelineInput = document.getElementById('timeline-input');
+        const complexityGroup = document.getElementById('complexity-group');
+        const detailsPanel = document.getElementById('details-panel');
+        const detailsTitle = document.getElementById('details-title');
+        const detailsContent = document.getElementById('details-content');
+        const detailsCloseBtn = document.getElementById('details-close-btn');
+        const loader = document.getElementById('loader');
+        const messageBox = document.getElementById('message-box');
+        const messageText = document.getElementById('message-text');
+        const exportSvgBtn = document.getElementById('export-svg-btn');
+        const nodeTypeSelect = document.getElementById('node-type-select');
+        const nodeStatusSelect = document.getElementById('node-status-select');
+        const aiCopilotSection = document.getElementById('ai-copilot-section');
+        const aiCopilotLoader = document.getElementById('ai-copilot-loader');
 
-        // App State
-        let state = {
-            nodes: [],
-            connectors: [],
-            generatedPaths: [],
-            currentPathIndex: null,
-            selectedNodeId: null,
-            nodeIdCounter: 0,
-            isDragging: false,
-            dragTarget: null,
-            offset: { x: 0, y: 0 },
-            transform: { x: 0, y: 0, k: 1 },
-            isPanning: false,
-            panStart: { x: 0, y: 0 },
-        };
-
+        // App State & Constants
+        let nodes = [];
+        let generatedPaths = [];
+        let currentPathIndex = null;
+        let selectedNodeId = null;
+        let nodeIdCounter = 0;
+        let isDragging = false, dragTarget = null, offset = { x: 0, y: 0 };
+        let transform = { x: 0, y: 0, k: 1 };
+        let isPanning = false, panStart = { x: 0, y: 0 };
         const SVG_NS = "http://www.w3.org/2000/svg";
         const g = document.createElementNS(SVG_NS, 'g');
-        dom.svg.appendChild(g);
+        svg.appendChild(g);
 
-        const NODE_WIDTH = 180;
+        const NODE_WIDTH = 200;
         const NODE_HEIGHT = 80;
         const LEVEL_HEIGHT = 160;
 
-        // --- Core Application Logic ---
-        
+        // --- Utility Functions ---
         function showMessage(message, type = 'error') {
-            dom.messageText.textContent = message;
-            dom.messageBox.className = `fixed bottom-5 right-5 text-white py-3 px-5 rounded-lg shadow-lg z-40 transition-all duration-300 ${type === 'error' ? 'bg-red-500' : 'bg-green-500'}`;
-            dom.messageBox.style.opacity = '1';
-            dom.messageBox.style.transform = 'translateY(0)';
+            messageText.textContent = message;
+            messageBox.className = `fixed bottom-5 right-5 text-white py-3 px-5 rounded-lg shadow-lg z-40 transition-all duration-300 ${type === 'error' ? 'bg-red-500' : 'bg-green-500'}`;
+            messageBox.style.opacity = '1';
+            messageBox.style.transform = 'translateY(0)';
             setTimeout(() => {
-                dom.messageBox.style.opacity = '0';
-                dom.messageBox.style.transform = 'translateY(2.5rem)';
+                messageBox.style.opacity = '0';
+                messageBox.style.transform = 'translateY(2.5rem)';
             }, 4000);
         }
-        
-        // --- Details Panel Logic ---
-        function showDetailsPanel(node) {
-            dom.detailsTitle.textContent = node.title;
-            dom.detailsContent.innerHTML = node.details.replace(/\n/g, '<br>');
-            dom.nodeTypeSelect.value = node.type || 'task';
-            dom.nodeStatusSelect.value = node.status || 'todo';
-            dom.aiCopilotSection.style.display = node.parentId === null ? 'none' : 'block';
 
-            dom.detailsPanel.style.opacity = '1';
-            dom.detailsPanel.style.pointerEvents = 'auto';
+        function getSVGPoint(x, y) {
+            const pt = svg.createSVGPoint();
+            pt.x = x;
+            pt.y = y;
+            return pt.matrixTransform(g.getScreenCTM().inverse());
+        }
+
+        // --- Details Panel ---
+        function showDetailsPanel(node) {
+            detailsTitle.textContent = node.title;
+            detailsContent.innerHTML = (node.details || '').replace(/\n/g, '<br>');
+            nodeTypeSelect.value = node.type || 'task';
+            nodeStatusSelect.value = node.status || 'todo';
+            aiCopilotSection.style.display = node.parentId === null ? 'none' : 'block';
+            detailsPanel.style.opacity = '1';
+            detailsPanel.style.pointerEvents = 'auto';
             positionDetailsPanel(node);
         }
 
         function positionDetailsPanel(node) {
-            if (!node || dom.detailsPanel.style.opacity === '0') return;
+            if (!node || detailsPanel.style.opacity === '0') return;
             const nodeElement = g.querySelector(`[data-id='${node.id}']`);
             if (!nodeElement) return;
-
-            const ctm = g.getScreenCTM();
-            const svgRect = dom.svg.getBoundingClientRect();
-            const panelWidth = dom.detailsPanel.offsetWidth;
-            
-            // Position to the right by default
-            let left = (node.x + NODE_WIDTH / 2) * state.transform.k + state.transform.x + 20;
-            let panelTransform = 'translateX(0)';
-
-            // If it goes off-screen, position to the left
+            const svgRect = svg.getBoundingClientRect();
+            const panelWidth = detailsPanel.offsetWidth;
+            let left = (node.x + NODE_WIDTH / 2) * transform.k + transform.x + 20;
             if (left + panelWidth > svgRect.width - 20) {
-                left = (node.x - NODE_WIDTH / 2) * state.transform.k + state.transform.x - panelWidth - 20;
+                left = (node.x - NODE_WIDTH / 2) * transform.k + transform.x - panelWidth - 20;
             }
-            
-            let top = (node.y - NODE_HEIGHT / 2) * state.transform.k + state.transform.y;
-            top = Math.max(10, Math.min(top, svgRect.height - dom.detailsPanel.offsetHeight - 10));
-
-            dom.detailsPanel.style.left = `${left}px`;
-            dom.detailsPanel.style.top = `${top}px`;
-            dom.detailsPanel.style.transform = panelTransform;
+            let top = (node.y - NODE_HEIGHT / 2) * transform.k + transform.y;
+            top = Math.max(10, Math.min(top, svgRect.height - detailsPanel.offsetHeight - 10));
+            detailsPanel.style.left = `${left}px`;
+            detailsPanel.style.top = `${top}px`;
         }
 
         function hideDetailsPanel() {
-            dom.detailsPanel.style.opacity = '0';
-            dom.detailsPanel.style.pointerEvents = 'none';
+            detailsPanel.style.opacity = '0';
+            detailsPanel.style.pointerEvents = 'none';
         }
 
         // --- Core Rendering & Drawing ---
         function createNode(data) {
             const newNode = {
-                id: state.nodeIdCounter++,
-                title: data.title,
-                details: data.details,
-                x: data.x, y: data.y,
-                parentId: data.parentId,
-                type: data.type || 'task',
-                status: data.status || 'todo',
-                isNew: data.isNew || false,
-                children: []
+                id: nodeIdCounter++, title: data.title,
+                details: data.details || data.actionable_details || '', 
+                x: data.x, y: data.y, parentId: data.parentId,
+                type: data.type || 'task', status: data.status || 'todo',
+                isNew: data.isNew || false, children: []
             };
-            state.nodes.push(newNode);
+            nodes.push(newNode);
             if (newNode.parentId !== null) {
-                const parent = state.nodes.find(n => n.id === newNode.parentId);
+                const parent = nodes.find(n => n.id === newNode.parentId);
                 if (parent) parent.children.push(newNode.id);
             }
             return newNode;
         }
 
         function render() {
-            g.innerHTML = ''; // Clear canvas
-            state.connectors = [];
-            const isDark = document.documentElement.classList.contains('dark');
+            // Define gradients for connectors
+            const defs = document.createElementNS(SVG_NS, 'defs');
+            defs.innerHTML = `
+                <linearGradient id="connector-gradient-light" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" style="stop-color:#a78bfa;stop-opacity:1" />
+                    <stop offset="100%" style="stop-color:#d1d5db;stop-opacity:1" />
+                </linearGradient>
+                <linearGradient id="connector-gradient-dark" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" style="stop-color:#8b5cf6;stop-opacity:1" />
+                    <stop offset="100%" style="stop-color:#4b5563;stop-opacity:1" />
+                </linearGradient>
+            `;
+            g.innerHTML = '';
+            g.appendChild(defs);
 
-            // Draw connectors first (so they are behind nodes)
-            state.nodes.forEach(node => {
+            const isDark = document.documentElement.classList.contains('dark');
+            const connectorUrl = isDark ? 'url(#connector-gradient-dark)' : 'url(#connector-gradient-light)';
+
+            nodes.forEach(node => {
                 if (node.parentId !== null) {
                     const connector = document.createElementNS(SVG_NS, 'path');
                     connector.setAttribute('class', 'connector');
+                    connector.setAttribute('stroke', connectorUrl);
                     connector.setAttribute('data-child-id', node.id);
                     g.appendChild(connector);
-                    state.connectors.push(connector);
                 }
             });
 
-            // Draw nodes
-            state.nodes.forEach(node => {
+            nodes.forEach(node => {
                 const group = document.createElementNS(SVG_NS, 'g');
                 group.setAttribute('class', 'node');
                 group.setAttribute('data-id', node.id);
-                // NEW: Apply animation class if node is new
                 if (node.isNew) {
                     group.classList.add('is-new');
-                    node.isNew = false; // Consume the flag
+                    node.isNew = false;
                 }
-                
                 const gTranslate = document.createElementNS(SVG_NS, 'g');
                 gTranslate.setAttribute('transform', `translate(${node.x}, ${node.y})`);
-                
                 const rect = document.createElementNS(SVG_NS, 'rect');
                 rect.setAttribute('width', NODE_WIDTH);
                 rect.setAttribute('height', NODE_HEIGHT);
@@ -378,111 +370,117 @@
                 rect.setAttribute('rx', 12);
 
                 let rectClasses = 'node-rect ';
+                // UPDATED: Clear visual distinction for root node (head)
                 if (node.parentId === null) {
-                    rectClasses += isDark ? 'fill-blue-900/50 stroke-blue-500' : 'fill-blue-100 stroke-blue-300';
+                     rectClasses += isDark ? 'fill-violet-800/80 stroke-violet-500' : 'fill-violet-500 stroke-violet-600';
                 } else {
-                    rectClasses += isDark ? 'fill-slate-800 stroke-slate-600' : 'fill-white stroke-slate-300';
+                     rectClasses += isDark ? 'fill-slate-800 stroke-slate-600' : 'fill-white stroke-slate-300';
                 }
+                if (node.id === selectedNodeId) rectClasses += ' selected';
                 rect.setAttribute('class', rectClasses);
                 if (node.type === 'milestone') rect.setAttribute('stroke-dasharray', '8 4');
-                if (node.id === state.selectedNodeId) rect.classList.add('selected');
-
+                
                 const fo = document.createElementNS(SVG_NS, 'foreignObject');
                 fo.setAttribute('x', -NODE_WIDTH / 2);
                 fo.setAttribute('y', -NODE_HEIGHT / 2);
                 fo.setAttribute('width', NODE_WIDTH);
                 fo.setAttribute('height', NODE_HEIGHT);
                 
-                // UPDATED: New inner structure for status dot
                 const statusClass = `status-${node.status || 'todo'}`;
-                fo.innerHTML = `<div class="node-foreign-object w-full h-full">
-                                    <span class="status-dot ${statusClass}"></span>
-                                    <span class="node-title node-text-display">${node.title.replace(/</g, "&lt;")}</span>
+                // UPDATED: Root node has different text color and no status dot
+                const titleColorClass = node.parentId === null && !isDark ? 'text-white' : 'text-slate-800 dark:text-slate-100';
+                const statusDotHTML = node.parentId !== null ? `<span class="status-dot ${statusClass}"></span>` : '';
+
+                fo.innerHTML = `<div class="node-foreign-object w-full h-full ${titleColorClass}">
+                                    ${statusDotHTML}
+                                    <div class="node-title node-text-display">${node.title.replace(/</g, "&lt;")}</div>
                                 </div>`;
 
                 gTranslate.appendChild(rect);
                 gTranslate.appendChild(fo);
                 group.appendChild(gTranslate);
+                group.addEventListener('dblclick', handleNodeDblClick);
                 g.appendChild(group);
             });
             updateConnectors();
         }
-        
+
         function updateNodePositions() {
-             state.nodes.forEach(node => {
+            nodes.forEach(node => {
                 const group = g.querySelector(`.node[data-id='${node.id}'] > g`);
-                if (group) {
-                    group.setAttribute('transform', `translate(${node.x}, ${node.y})`);
-                }
+                if (group) group.setAttribute('transform', `translate(${node.x}, ${node.y})`);
             });
             updateConnectors();
         }
 
+        function getCurvePath(startX, startY, endX, endY) {
+            const c1Y = startY + (endY - startY) * 0.5;
+            const c2Y = endY - (endY - startY) * 0.5;
+            return `M ${startX},${startY} C ${startX},${c1Y} ${endX},${c2Y} ${endX},${endY}`;
+        }
+        
         function updateConnectors() {
-            state.connectors.forEach(conn => {
+            g.querySelectorAll('.connector').forEach(conn => {
                 const childId = parseInt(conn.getAttribute('data-child-id'));
-                const child = state.nodes.find(n => n.id === childId);
-                const parent = state.nodes.find(p => p.id === child.parentId);
+                const child = nodes.find(n => n.id === childId);
+                const parent = nodes.find(p => p.id === child.parentId);
                 if (child && parent) {
-                    const startX = parent.x;
-                    const startY = parent.y + NODE_HEIGHT / 2;
-                    const endX = child.x;
-                    const endY = child.y - NODE_HEIGHT / 2;
-                    conn.setAttribute('d', getCurvePath(startX, startY, endX, endY));
+                    conn.setAttribute('d', getCurvePath(parent.x, parent.y + NODE_HEIGHT / 2, child.x, child.y - NODE_HEIGHT / 2));
                 }
             });
         }
-        
-        function getRootNode() {
-            return state.nodes.find(n => n.parentId === null);
-        }
 
-        function reLayoutAndRender() {
+        // --- Tree & Layout Logic ---
+        function getRootNode() { return nodes.find(n => n.parentId === null); }
+
+        function reLayoutAndRender(shouldAnimate = true) {
             const root = getRootNode();
             if (!root) return;
             calculateBranchWidth(root.id);
             positionTree(root.id, root.x, root.y);
-            updateNodePositions(); // This will trigger the CSS transition
-            setTimeout(() => {
-                if (state.selectedNodeId) {
-                    positionDetailsPanel(state.nodes.find(n => n.id === state.selectedNodeId));
-                }
-            }, 600); // Wait for transition to finish before repositioning panel
+
+            if (shouldAnimate) {
+                updateNodePositions();
+                setTimeout(() => {
+                    if (selectedNodeId !== null) positionDetailsPanel(nodes.find(n => n.id === selectedNodeId));
+                }, 600);
+            } else {
+                render();
+            }
         }
         
         function resetView() {
-            if (state.nodes.length === 0) return;
+            if (nodes.length === 0) return;
             const bounds = g.getBBox();
             if (bounds.width === 0 || bounds.height === 0) return;
-            const parent = dom.svg.parentElement;
+            const parent = svg.parentElement;
             const { width, height } = parent.getBoundingClientRect();
             
             const scaleX = width / (bounds.width + 120);
             const scaleY = height / (bounds.height + 120);
-            state.transform.k = Math.min(scaleX, scaleY, 1);
+            transform.k = Math.min(scaleX, scaleY, 1);
 
-            state.transform.x = (width / 2) - (bounds.x + bounds.width / 2) * state.transform.k;
-            state.transform.y = (height / 2) - (bounds.y + bounds.height / 2) * state.transform.k + (NODE_HEIGHT / 2 * state.transform.k);
+            transform.x = (width / 2) - (bounds.x + bounds.width / 2) * transform.k;
+            transform.y = (height / 2) - (bounds.y + bounds.height / 2) * transform.k + (NODE_HEIGHT / 2 * transform.k);
             
             applyTransform();
         }
 
         function applyTransform() {
-            g.setAttribute('transform', `translate(${state.transform.x}, ${state.transform.y}) scale(${state.transform.k})`);
-            if (state.selectedNodeId !== null) {
-                positionDetailsPanel(state.nodes.find(n => n.id === state.selectedNodeId));
+            g.setAttribute('transform', `translate(${transform.x}, ${transform.y}) scale(${transform.k})`);
+            if (selectedNodeId !== null) {
+                positionDetailsPanel(nodes.find(n => n.id === selectedNodeId));
             } else {
                 hideDetailsPanel();
             }
         }
-        
-        // Tree layout algorithms
+
         function positionTree(nodeId, x, y) {
-            const node = state.nodes.find(n => n.id === nodeId);
+            const node = nodes.find(n => n.id === nodeId);
             if (!node) return;
             node.x = x;
             node.y = y;
-            const children = state.nodes.filter(n => n.parentId === nodeId);
+            const children = nodes.filter(n => n.parentId === nodeId);
             if (children.length > 0) {
                 const totalChildBranchWidths = children.reduce((sum, child) => sum + child.branchWidth, 0);
                 const totalSpacing = (children.length - 1) * 60;
@@ -494,11 +492,11 @@
                 });
             }
         }
-        
+
         function calculateBranchWidth(nodeId) {
-            const node = state.nodes.find(n => n.id === nodeId);
+            const node = nodes.find(n => n.id === nodeId);
             if (!node) return 0;
-            const children = state.nodes.filter(n => n.parentId === nodeId);
+            const children = nodes.filter(n => n.parentId === nodeId);
             if (children.length === 0) {
                 node.branchWidth = NODE_WIDTH;
                 return NODE_WIDTH;
@@ -509,214 +507,317 @@
         }
 
         function buildTreeFromPath(path) {
-            state.nodes = [];
-            state.nodeIdCounter = 0;
-            state.selectedNodeId = null;
+            nodes = [];
+            nodeIdCounter = 0;
+            selectedNodeId = null;
             hideDetailsPanel();
-
             function addProperties(step) {
                 step.type = step.type || 'task';
                 step.status = step.status || 'todo';
-                step.isNew = true; // Mark all nodes as new for animation
+                step.isNew = true;
                 if (step.sub_steps) step.sub_steps.forEach(addProperties);
             }
             path.steps.forEach(addProperties);
-
             const rootNode = createNode({ title: path.pathName, details: path.description, x: 0, y: 0, parentId: null, type: 'milestone', isNew: true });
-
             function buildSubTree(currentSteps, parentId) {
                 (currentSteps || []).forEach(step => {
                     const newNode = createNode({ ...step, parentId, x: rootNode.x, y: rootNode.y });
-                    if(step.sub_steps && step.sub_steps.length > 0) {
-                        buildSubTree(step.sub_steps, newNode.id);
-                    }
+                    if(step.sub_steps && step.sub_steps.length > 0) buildSubTree(step.sub_steps, newNode.id);
                 });
             }
             buildSubTree(path.steps, rootNode.id);
-            
             calculateBranchWidth(rootNode.id);
             positionTree(rootNode.id, 0, 50);
-
             render();
             resetView();
         }
 
-        function visualizePath(pathIndex) {
-            const path = state.generatedPaths[pathIndex];
-            if (!path) return;
-            state.currentPathIndex = pathIndex;
-            dom.mindMapLoader.style.display = 'flex';
-            // Show mind map view elements
-            dom.pathsDashboardView.classList.add('hidden');
-            dom.mindMapView.classList.remove('hidden');
-            dom.mindMapControls.classList.remove('hidden');
-            dom.newGoalBtn.classList.add('hidden');
-
-            setTimeout(() => { 
-                buildTreeFromPath(path);
-                dom.mindMapLoader.style.display = 'none';
-            }, 100);
+        // --- API & Data Handling ---
+        function savePathsToStorage() { localStorage.setItem('mindRoadPaths', JSON.stringify(generatedPaths)); }
+        function loadPathsFromStorage() { const s = localStorage.getItem('mindRoadPaths'); if(s) generatedPaths = JSON.parse(s); }
+        
+        function getApiKey() {
+            // IMPORTANT: For a production application, this key should be fetched 
+            // from a secure backend service, not stored in client-side code.
+            // This method is a small obscurity step for development only.
+            return 'AIzaSyCappvFF3ChV3JG1rox5OtFN4cX337-aRc';
         }
         
-        // --- Event Handlers & miscellaneous ---
-        // (Includes API calls, persistence, UI interactions)
-        // ... Most of these functions remain similar, but now use the 'dom' and 'state' objects ...
-        // Example of a modified handler:
-        function handleDetailsPanelChange(e) {
-            if (state.selectedNodeId === null) return;
-            const node = state.nodes.find(n => n.id === state.selectedNodeId);
-            if (!node) return;
-
-            if (e.target.id === 'node-type-select') node.type = e.target.value;
-            else if (e.target.id === 'node-status-select') node.status = e.target.value;
+        async function callGeminiAPI(prompt, jsonResponse = true) {
+            const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
+            if(jsonResponse) payload.generationConfig = { responseMimeType: "application/json" };
+            const apiKey = getApiKey();
+            if (!apiKey) throw new Error("API Key is missing.");
             
-            // Minimal re-render: just update the specific node's visuals
-            const gNode = g.querySelector(`.node[data-id='${node.id}']`);
-            const rect = gNode.querySelector('rect');
-            const statusDot = gNode.querySelector('.status-dot');
-            const isDark = document.documentElement.classList.contains('dark');
-            
-            let rectClasses = 'node-rect ';
-            if (node.parentId === null) { rectClasses += isDark ? 'fill-blue-900/50 stroke-blue-500' : 'fill-blue-100 stroke-blue-300'; }
-            else { rectClasses += isDark ? 'fill-slate-800 stroke-slate-600' : 'fill-white stroke-slate-300'; }
-            if (node.id === state.selectedNodeId) rectClasses += ' selected';
-            rect.setAttribute('class', rectClasses);
-            
-            if (node.type === 'milestone') rect.setAttribute('stroke-dasharray', '8 4');
-            else rect.removeAttribute('stroke-dasharray');
-            
-            statusDot.setAttribute('class', `status-dot status-${node.status || 'todo'}`);
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+            const response = await fetch(apiUrl, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+            });
+            if (!response.ok) {
+                const errorBody = await response.text();
+                throw new Error(`API request failed: ${response.statusText}. Response: ${errorBody}`);
+            }
+            const result = await response.json();
+            return result.candidates[0].content.parts[0].text;
         }
-        
+
+        async function handleGeneratePaths() {
+            if (!goalInput.value.trim()) { showMessage("Please define your primary goal."); return; }
+            loader.style.display = 'inline-block'; generatePathsBtn.disabled = true;
+            const prompt = `You are an expert project strategist. User's Goal: "${goalInput.value.trim()}", Budget: "${budgetInput.value.trim() || 'Not specified'}", Timeline: "${timelineInput.value.trim() || 'Not specified'}", Complexity: "${document.querySelector('input[name="complexity"]:checked').value}". Generate 3 distinct strategic paths. For 'Complex' complexity, include some nested 'sub_steps'. Return ONLY a valid JSON object with a key "paths" which is an array of path objects: {"pathName": "Name", "description": "Summary", "cost": "Cost analysis", "risks": ["List risks"], "steps": [{"title": "Step 1", "actionable_details": "Details", "sub_steps": []}]}`;
+            
+            try {
+                const textResponse = await callGeminiAPI(prompt);
+                const parsedJson = JSON.parse(textResponse);
+                if (parsedJson.paths && Array.isArray(parsedJson.paths)) {
+                    generatedPaths.push(...parsedJson.paths);
+                    savePathsToStorage();
+                    renderPathsPanel();
+                    goalModal.style.display = 'none';
+                    showMessage("New strategies generated!", 'success');
+                } else { throw new Error("Invalid JSON structure from AI."); }
+            } catch (error) { showMessage(`AI Error: ${error.message}`); }
+            finally { loader.style.display = 'none'; generatePathsBtn.disabled = false; }
+        }
+
         async function handleAiNodeExpansion(action, nodeId) {
-            const node = state.nodes.find(n => n.id === nodeId);
+            const node = nodes.find(n => n.id === nodeId);
             if (!node) return;
-            dom.aiCopilotLoader.style.display = 'block';
+            aiCopilotLoader.style.display = 'block';
             document.querySelectorAll('.ai-copilot-btn').forEach(b => b.disabled = true);
             let prompt;
-            if (action === 'breakdown') { prompt = `Given the project step: "${node.title}" with details "${node.details}", break it down into 3-4 actionable sub-steps. Return ONLY a valid JSON object with a single key "new_nodes", which is an array. Each object in the array must have "title" and "actionable_details" keys.`; }
-            else if (action === 'risks') { prompt = `Given the project step: "${node.title}" with details "${node.details}", identify 2-3 potential risks or challenges associated with it. Frame each risk as a task to mitigate it. Return ONLY a valid JSON object with a single key "new_nodes", which is an array. Each object in the array must have "title" and "actionable_details" keys.`; }
+            if (action === 'breakdown') { prompt = `Given the project step: "${node.title}", break it down into 3-4 actionable sub-steps. Return ONLY a valid JSON object with a single key "new_nodes", an array of objects, each with "title" and "actionable_details" keys.`; }
+            else if (action === 'risks') { prompt = `Given the project step: "${node.title}", identify 2-3 potential risks. Frame each risk as a task to mitigate it. Return ONLY a valid JSON object with a single key "new_nodes", an array of objects, each with "title" and "actionable_details" keys.`; }
 
             try {
-                const apiKey = "AIzaSyCappvFF3ChV3JG1rox5OtFN4cX337-aRc"; // <-- REPLACE
-                const textResponse = await callGeminiAPI(prompt, apiKey);
+                const textResponse = await callGeminiAPI(prompt);
                 const parsedJson = JSON.parse(textResponse);
-
                 if (parsedJson.new_nodes && Array.isArray(parsedJson.new_nodes)) {
                     parsedJson.new_nodes.forEach(newNodeData => {
                         createNode({ ...newNodeData, parentId: node.id, x: node.x, y: node.y, isNew: true });
                     });
-                    render(); // Full re-render to add new nodes to DOM
-                    reLayoutAndRender(); // Animate to new positions
+                    render();
+                    reLayoutAndRender(true);
                     showMessage("AI Co-pilot added new steps!", "success");
                 } else { throw new Error("Invalid JSON structure from AI Co-pilot."); }
-            } catch(error) {
-                showMessage(`AI Co-pilot Error: ${error.message}`);
-            } finally {
-                dom.aiCopilotLoader.style.display = 'none';
+            } catch(error) { showMessage(`AI Co-pilot Error: ${error.message}`); }
+            finally {
+                aiCopilotLoader.style.display = 'none';
                 document.querySelectorAll('.ai-copilot-btn').forEach(b => b.disabled = false);
             }
         }
         
-        // Stubs for other functions that would be refactored to use state/dom objects
-        function savePathsToStorage() { localStorage.setItem('mindRoadPaths', JSON.stringify(state.generatedPaths)); }
-        function loadPathsFromStorage() { const s = localStorage.getItem('mindRoadPaths'); if(s) state.generatedPaths = JSON.parse(s); }
-        async function callGeminiAPI(prompt, apiKey) { /* ... implementation ... */ return "{}"; }
-        function renderPathsPanel() { /* ... implementation ... */ }
-        function deletePath(index) { /* ... implementation ... */ }
-        function handleGeneratePaths() { /* ... implementation ... */ }
-        function handleNodeDblClick(e) { /* ... implementation ... */ }
+        function handleNodeDblClick(e) {
+            const gTranslate = e.currentTarget.querySelector('g');
+            const nodeId = parseInt(e.currentTarget.dataset.id);
+            const nodeData = nodes.find(n => n.id === nodeId);
+            if (!nodeData) return;
+            const foreignObject = gTranslate.querySelector('foreignObject');
+            const innerDiv = foreignObject.querySelector('.node-foreign-object');
+            innerDiv.style.display = 'none';
+            const input = document.createElement('textarea');
+            input.value = nodeData.title;
+            input.className = 'w-full h-full text-center bg-transparent border border-violet-500 rounded-lg focus:outline-none p-2 resize-none';
+            input.style.color = nodeData.parentId === null && !document.documentElement.classList.contains('dark') ? '#fff' : 'inherit';
+            foreignObject.appendChild(input);
+            input.focus();
+            input.select();
+            function saveChanges() {
+                const newTitle = input.value.trim();
+                if (newTitle) nodeData.title = newTitle;
+                foreignObject.removeChild(input);
+                innerDiv.querySelector('.node-title').innerHTML = nodeData.title.replace(/</g, "&lt;");
+                innerDiv.style.display = 'flex';
+            }
+            input.addEventListener('blur', saveChanges);
+            input.addEventListener('keydown', (ev) => {
+                if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); saveChanges(); }
+                else if (ev.key === 'Escape') { foreignObject.removeChild(input); innerDiv.style.display = 'flex'; }
+            });
+        }
         
-        // --- Event Listener Wire-up ---
+        // --- Setup and Listeners ---
         function init() {
-            // Mouse/Touch events for pan, zoom, drag
-            dom.svg.addEventListener('mousedown', e => {
-                if (document.activeElement.tagName === 'INPUT') return;
-                const targetNode = e.target.closest('.node');
-                if (targetNode) {
-                    const id = parseInt(targetNode.getAttribute('data-id'));
-                    const node = state.nodes.find(n => n.id === id);
-                    if (state.selectedNodeId !== id) {
-                        state.selectedNodeId = id;
-                        showDetailsPanel(node);
-                        render(); // Just to update selection visuals
+            // UI Button Listeners
+            backToPathsBtn.addEventListener('click', () => {
+                pathsDashboardView.classList.remove('hidden');
+                mindMapView.classList.add('hidden');
+                mindMapControls.classList.add('hidden');
+                newGoalBtn.classList.remove('hidden');
+            });
+            newGoalBtn.addEventListener('click', () => { goalModal.style.display = 'flex'; });
+            cancelGoalBtn.addEventListener('click', () => { goalModal.style.display = 'none'; });
+            generatePathsBtn.addEventListener('click', handleGeneratePaths);
+            detailsCloseBtn.addEventListener('click', hideDetailsPanel);
+            resetViewBtn.addEventListener('click', resetView);
+            exportSvgBtn.addEventListener('click', () => { /* SVG Export logic */ });
+            
+            // THEME TOGGLE FIX
+            themeToggle.addEventListener('click', () => {
+                const isDark = document.documentElement.classList.toggle('dark');
+                localStorage.setItem('theme', isDark ? 'dark' : 'light');
+                updateTheme();
+            });
+            
+            function updateTheme() {
+                const isDark = document.documentElement.classList.contains('dark');
+                themeIconLight.classList.toggle('hidden', isDark);
+                themeIconDark.classList.toggle('hidden', !isDark);
+                // This call is crucial to redraw the SVG with the new theme colors
+                if (!mindMapView.classList.contains('hidden')) {
+                    render();
+                }
+            }
+
+            pathsContainer.addEventListener('click', (e) => {
+                if(e.target.closest('.delete-path-btn')) {
+                    const index = parseInt(e.target.closest('.delete-path-btn').dataset.index);
+                    if (confirm(`Delete path: "${generatedPaths[index].pathName}"?`)) {
+                        generatedPaths.splice(index, 1);
+                        savePathsToStorage();
+                        renderPathsPanel();
+                        showMessage("Path deleted.", 'success');
                     }
-                    state.isDragging = true;
-                    state.dragTarget = targetNode.querySelector('g');
-                    const startPoint = getSVGPoint(e.clientX, e.clientY);
-                    state.offset.x = startPoint.x - node.x;
-                    state.offset.y = startPoint.y - node.y;
-                } else {
-                    state.selectedNodeId = null;
-                    state.isPanning = true;
-                    state.panStart.x = e.clientX - state.transform.x;
-                    state.panStart.y = e.clientY - state.transform.y;
-                    hideDetailsPanel();
-                    render(); // To de-select node
+                } else if(e.target.closest('.path-card-clickable')) {
+                    const index = parseInt(e.target.closest('.path-card-clickable').dataset.index);
+                    visualizePath(index);
                 }
             });
-            dom.svg.addEventListener('mousemove', e => {
-                if (state.isDragging && state.dragTarget && state.selectedNodeId !== null) {
-                    e.preventDefault();
-                    const currentPoint = getSVGPoint(e.clientX, e.clientY);
-                    const node = state.nodes.find(n => n.id === state.selectedNodeId);
+            
+            detailsPanel.addEventListener('change', (e) => {
+                if (selectedNodeId === null) return;
+                const node = nodes.find(n => n.id === selectedNodeId);
+                if (!node) return;
+                if (e.target.id === 'node-type-select') node.type = e.target.value;
+                else if (e.target.id === 'node-status-select') node.status = e.target.value;
+                render();
+            });
+            
+            aiCopilotSection.addEventListener('click', (e) => {
+                const btn = e.target.closest('.ai-copilot-btn');
+                if (btn && selectedNodeId !== null) handleAiNodeExpansion(btn.dataset.action, selectedNodeId);
+            });
+            
+            // Pan, Zoom, Drag Listeners
+            svg.addEventListener('mousedown', e => {
+                if (e.target.closest('.node')) {
+                    const nodeEl = e.target.closest('.node');
+                    const id = parseInt(nodeEl.dataset.id);
+                    const node = nodes.find(n => n.id === id);
+                    if (selectedNodeId !== id) {
+                        selectedNodeId = id;
+                        render();
+                        showDetailsPanel(node);
+                    }
+                    isDragging = true;
+                    dragTarget = nodeEl.querySelector('g');
+                    const startPoint = getSVGPoint(e.clientX, e.clientY);
+                    offset.x = startPoint.x - node.x;
+                    offset.y = startPoint.y - node.y;
+                } else {
+                    isPanning = true;
+                    panStart.x = e.clientX - transform.x;
+                    panStart.y = e.clientY - transform.y;
+                    if(selectedNodeId !== null) {
+                        selectedNodeId = null;
+                        render();
+                        hideDetailsPanel();
+                    }
+                }
+            });
+            window.addEventListener('mousemove', e => {
+                if (isDragging && dragTarget && selectedNodeId !== null) {
+                    const node = nodes.find(n => n.id === selectedNodeId);
                     if (node) {
-                        node.x = currentPoint.x - state.offset.x;
-                        node.y = currentPoint.y - state.offset.y;
-                        state.dragTarget.setAttribute('transform', `translate(${node.x}, ${node.y})`);
+                        const currentPoint = getSVGPoint(e.clientX, e.clientY);
+                        node.x = currentPoint.x - offset.x;
+                        node.y = currentPoint.y - offset.y;
+                        dragTarget.setAttribute('transform', `translate(${node.x}, ${node.y})`);
                         updateConnectors();
                         positionDetailsPanel(node);
                     }
-                } else if (state.isPanning) {
-                     e.preventDefault();
-                     state.transform.x = e.clientX - state.panStart.x;
-                     state.transform.y = e.clientY - state.panStart.y;
+                } else if (isPanning) {
+                     transform.x = e.clientX - panStart.x;
+                     transform.y = e.clientY - panStart.y;
                      applyTransform();
                 }
             });
             window.addEventListener('mouseup', () => {
-                if (state.isDragging) reLayoutAndRender(); // Snap back to grid if needed (future feature)
-                state.isDragging = false;
-                state.dragTarget = null;
-                state.isPanning = false;
+                isDragging = false;
+                dragTarget = null;
+                isPanning = false;
             });
-            dom.svg.addEventListener('wheel', e => {
-                 e.preventDefault();
+            svg.addEventListener('wheel', e => {
+                e.preventDefault();
                 const scaleAmount = 1 - e.deltaY * 0.001;
-                const newScale = state.transform.k * scaleAmount;
+                const newScale = transform.k * scaleAmount;
                 if (newScale < 0.1 || newScale > 2.5) return;
                 const mousePoint = getSVGPoint(e.clientX, e.clientY);
-                state.transform.x = mousePoint.x + (state.transform.x - mousePoint.x) * scaleAmount;
-                state.transform.y = mousePoint.y + (state.transform.y - mousePoint.y) * scaleAmount;
-                state.transform.k = newScale;
+                transform.x = mousePoint.x + (transform.x - mousePoint.x) * scaleAmount;
+                transform.y = mousePoint.y + (transform.y - mousePoint.y) * scaleAmount;
+                transform.k = newScale;
                 applyTransform();
             });
-            
-            // Other UI Listeners
-            dom.detailsPanel.addEventListener('change', handleDetailsPanelChange);
-            dom.aiCopilotSection.addEventListener('click', e => {
-                const btn = e.target.closest('.ai-copilot-btn');
-                if (btn && state.selectedNodeId !== null) handleAiNodeExpansion(btn.dataset.action, state.selectedNodeId);
-            });
-            dom.detailsCloseBtn.addEventListener('click', hideDetailsPanel);
-            dom.resetViewBtn.addEventListener('click', resetView);
-            dom.themeToggle.addEventListener('click', () => { /* ... theme toggle logic ... */ });
-            
+
             // Initial Load
             loadPathsFromStorage();
-            // renderPathsPanel();
-            if (state.generatedPaths.length === 0) dom.goalModal.style.display = 'flex';
+            renderPathsPanel();
+            if (generatedPaths.length === 0) goalModal.style.display = 'flex';
+            updateTheme();
         }
 
-        // Helper to get SVG point
-        function getSVGPoint(x, y) {
-            const pt = dom.svg.createSVGPoint();
-            pt.x = x;
-            pt.y = y;
-            return pt.matrixTransform(g.getScreenCTM().inverse());
+        function visualizePath(index) {
+            currentPathIndex = index;
+            mindMapLoader.style.display = 'flex';
+            pathsDashboardView.classList.add('hidden');
+            mindMapView.classList.remove('hidden');
+            mindMapControls.classList.remove('hidden');
+            newGoalBtn.classList.add('hidden');
+            setTimeout(() => {
+                buildTreeFromPath(generatedPaths[index]);
+                mindMapLoader.style.display = 'none';
+            }, 100);
         }
 
-        init(); // Start the application
+        function renderPathsPanel() {
+            if (generatedPaths.length > 0) {
+                noPathsMessage.style.display = 'none';
+                pathsContainer.innerHTML = '';
+                generatedPaths.forEach((path, index) => {
+                    const pathCard = document.createElement('div');
+                    pathCard.className = 'path-card flex flex-col border border-slate-200 dark:border-slate-700 p-6 rounded-lg bg-white dark:bg-slate-800';
+                    const clickableContent = document.createElement('div');
+                    clickableContent.className = 'path-card-clickable cursor-pointer flex-grow';
+                    clickableContent.dataset.index = index;
+                    clickableContent.innerHTML = `
+                        <h3 class="font-bold text-xl text-violet-500">${path.pathName}</h3>
+                        <p class="text-sm text-slate-600 dark:text-slate-300 mt-2 h-20 overflow-hidden">${path.description}</p>
+                        <div class="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
+                            <h4 class="font-semibold text-sm text-slate-800 dark:text-slate-200">💰 Cost Analysis</h4>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">${path.cost}</p>
+                        </div>
+                        <div class="mt-3">
+                            <h4 class="font-semibold text-sm text-slate-800 dark:text-slate-200">⚠️ Risk Management</h4>
+                            <ul class="list-disc list-inside text-xs text-slate-500 dark:text-slate-400 mt-1 space-y-1">
+                                ${(path.risks || []).map(risk => `<li>${risk.replace(/</g, "&lt;")}</li>`).join('')}
+                            </ul>
+                        </div>
+                    `;
+                    const cardFooter = document.createElement('div');
+                    cardFooter.className = 'mt-4 pt-4 border-t border-slate-100 dark:border-slate-700 text-right';
+                    cardFooter.innerHTML = `<button data-index="${index}" class="delete-path-btn text-xs font-semibold text-red-500 hover:text-red-700 dark:hover:text-red-400">Delete Path</button>`;
+                    pathCard.appendChild(clickableContent);
+                    pathCard.appendChild(cardFooter);
+                    pathsContainer.appendChild(pathCard);
+                });
+            } else {
+                pathsContainer.innerHTML = '';
+                noPathsMessage.style.display = 'block';
+            }
+        }
+        
+        init();
+
     </script>
 </body>
 </html>
