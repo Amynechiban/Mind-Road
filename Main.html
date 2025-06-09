@@ -538,11 +538,11 @@
             // Do not expose your API key in client-side code in a real application.
             // This key is for demonstration purposes. In production, you should use a backend
             // proxy server to make API calls securely.
-            const apiKey = "YOUR_GEMINI_API_KEY"; // <-- REPLACE WITH YOUR KEY
+            const apiKey = "AIzaSyCappvFF3ChV3JG1rox5OtFN4cX337-aRc"; // <-- REPLACE WITH YOUR KEY
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
             try {
-                if(apiKey === "YOUR_GEMINI_API_KEY") {
+                if(apiKey === "AIzaSyCappvFF3ChV3JG1rox5OtFN4cX337-aRc") {
                     throw new Error("API Key not set. Please replace 'YOUR_GEMINI_API_KEY' in the script.");
                 }
                 const response = await fetch(apiUrl, {
